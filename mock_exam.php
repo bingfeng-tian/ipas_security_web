@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>三等無線電測驗</title>
+    <title>IPAS 資訊安全初級模擬測驗</title>
     <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>

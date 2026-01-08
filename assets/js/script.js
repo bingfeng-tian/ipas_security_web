@@ -2,7 +2,8 @@ let currentAns = "", currentId = 0, isAnswered = false;
 let sessionCorrect = 0, sessionTotal = 0;
 let currentQuestionData = {}; 
 
-const allCategories = ['無線電規章與相關法規', '無線電通訊方法', '無線電系統原理', '無線電相關安全防護', '電磁相容性技術', '射頻干擾的預防與排除'];
+// [修改 1] 更新分類：IPAS 初級主要分為這兩大科
+const allCategories = ['資訊安全管理概論', '資訊安全技術概論'];
 
 function loadSettings() {
     document.getElementById('recordModeToggle').checked = (localStorage.getItem('isRecordMode') !== 'false');
@@ -16,10 +17,11 @@ function loadSettings() {
 function renderCategoryFilters(selectedCats) {
     const container = document.getElementById('categoryFilters');
     if(container) {
+        // [修改 2] 移除 .replace('無線電', '')，直接顯示分類名稱
         container.innerHTML = allCategories.map(cat => `
             <div style="margin-bottom:6px; display:flex; align-items:center;">
                 <input type="checkbox" class="cat-checkbox" value="${cat}" ${selectedCats.includes(cat) ? 'checked' : ''} onchange="saveSettings()"> 
-                <span style="margin-left:8px;">${cat.replace('無線電', '')}</span>
+                <span style="margin-left:8px;">${cat}</span>
             </div>`).join('');
     }
 }
@@ -106,7 +108,8 @@ function checkAns(choice) {
  * 產生 Prompt 並呼叫 utils.js 中的 copyToClipboard
  */
 function copyAndAskAI_Single() {
-    const prompt = `我正在練習業餘無線電題目，請幫我解析這題：
+    // [修改 3] 更新 AI 提示詞 Context
+    const prompt = `我正在練習 IPAS 資訊安全初級題目，請幫我解析這題：
 
 題目：${currentQuestionData.question}
 選項：
@@ -118,7 +121,7 @@ D. ${currentQuestionData.option_d}
 正確答案：${currentQuestionData.answer}
 我的選擇：${currentQuestionData.userChoice}
 
-請告訴我為什麼選 ${currentQuestionData.answer}，並解釋相關的無線電原理或法規觀念。`;
+請告訴我為什麼選 ${currentQuestionData.answer}，並解釋相關的資安原理或防護觀念。`;
 
     copyToClipboard(prompt);
 }

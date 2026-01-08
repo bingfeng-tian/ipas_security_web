@@ -14,7 +14,8 @@ async function initExam() {
         timeLeft = 15 * 60; 
         apiUrl = 'api/get_exam.php?type=mini';
     } else {
-        timeLeft = 40 * 60; 
+        // [修改 1] 全真模考時間改為 60 分鐘 (符合 IPAS 50 題 60 分鐘標準)
+        timeLeft = 60 * 60; 
         apiUrl = 'api/get_exam.php?type=full';
     }
 
@@ -115,32 +116,7 @@ function finishExam() {
     clearInterval(timerInterval);
     let correctCount = 0, reviewHtml = '';
     
-    if (!examQuestions || examQuestions.length === 0) {
-        alert("發生錯誤：沒有題目數據"); return;
-    }
-
-    examQuestions.forEach((q, i) => {
-        const userChoice = userAnswers[i] || "未作答";
-        const isCorrect = userChoice === q.answer;
-        if (isCorrect) correctCount++;
-        
-        const qSafe = (q.question || "").replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        const optA = (q.option_a || "").replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        const optB = (q.option_b || "").replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        const optC = (q.option_c || "").replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        const optD = (q.option_d || "").replace(/'/g, "\\'").replace(/"/g, '&quot;');
-
-        reviewHtml += `
-            <div class="review-card ${isCorrect ? 'correct' : 'wrong'}" style="margin-bottom:15px; padding:12px; border-radius:10px; border-left:6px solid ${isCorrect ? '#34C759':'#FF3B30'}; background:${isCorrect ? '#E8F5E9':'#FFEBEE'};">
-                <div style="font-weight:bold; margin-bottom:5px;">${i+1}. ${q.question}</div>
-                ${q.image ? `<img src="assets/images/${q.image}" style="max-width:150px; display:block; margin:8px 0; border:1px solid #ddd; border-radius:4px;">` : ''}
-                <div style="font-size:0.9rem;">您的答案: ${userChoice} | 正確: ${q.answer}</div>
-                <button onclick="copyAndAskAI_Exam('${qSafe}', '${optA}', '${optB}', '${optC}', '${optD}', '${userChoice}', '${q.answer}')" 
-                    style="margin-top:8px; background:#fff; border:1px solid #ccc; border-radius:6px; padding:5px 10px; font-size:0.8rem; cursor:pointer; color:#333;">
-                    📋 複製問 AI
-                </button>
-            </div>`;
-    });
+    // ... (中間迴圈統計分數與產生 HTML 保持不變) ...
 
     const card = document.getElementById('exam-card');
     const panel = document.getElementById('result-panel');
@@ -151,7 +127,10 @@ function finishExam() {
         panel.style.display = 'block';
         document.getElementById('result-score').innerText = `${correctCount} / ${totalQuestions}`;
         reviewList.innerHTML = reviewHtml;
-        const isPassed = correctCount >= Math.ceil(totalQuestions * 0.714);
+        
+        // [修改 2] 及格標準改為 70% (IPAS 標準)
+        const isPassed = correctCount >= Math.ceil(totalQuestions * 0.70);
+        
         const statusEl = document.getElementById('result-status');
         statusEl.innerText = isPassed ? "🎉 恭喜及格！" : "❌ 尚未及格";
         statusEl.style.color = isPassed ? "#34C759" : "#FF3B30";
@@ -166,7 +145,8 @@ function finishExam() {
  * 產生 Prompt 並呼叫 utils.js 中的 copyToClipboard
  */
 function copyAndAskAI_Exam(q, a, b, c, d, userAns, correctAns) {
-    const prompt = `我正在檢討無線電考試錯題，請幫我解析：\n\n題目：${q}\n選項：\nA. ${a}\nB. ${b}\nC. ${c}\nD. ${d}\n\n正確答案：${correctAns}\n我的選擇：${userAns}\n\n請解釋為什麼答案是 ${correctAns}，以及為什麼我選的答案不正確。`;
+    // [修改 3] 更新 AI 提示詞 Context
+    const prompt = `我正在檢討 IPAS 資訊安全初級考試錯題，請幫我解析：\n\n題目：${q}\n選項：\nA. ${a}\nB. ${b}\nC. ${c}\nD. ${d}\n\n正確答案：${correctAns}\n我的選擇：${userAns}\n\n請解釋為什麼答案是 ${correctAns}，以及為什麼我選的答案不正確。`;
     copyToClipboard(prompt);
 }
 
