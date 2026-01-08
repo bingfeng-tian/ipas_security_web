@@ -4,24 +4,32 @@ require_once '../config/db.php';
 $cats = isset($_GET['cats']) ? $_GET['cats'] : '';
 $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 10;
 
-// 基本防禦
-$cat_list = "''";
+$cols = "id, category, question, 
+         A as option_a, B as option_b, C as option_c, D as option_d, 
+         answer, explanation as 'explain', photo as image";
+
+$catList = [];
 if (!empty($cats)) {
-    $cat_array = explode(',', $cats);
-    $cat_list = "'" . implode("','", array_map(fn($c) => mysqli_real_escape_string($conn, $c), $cat_array)) . "'";
+    $catList = explode(',', $cats);
+}
+
+if (empty($catList)) {
+    $sql = "SELECT $cols FROM questions ORDER BY RANDOM() LIMIT $limit";
+    $params = [];
 } else {
-    // 若未選則預設全選
-    $cat_list = "'無線電規章與相關法規','無線電通訊方法','無線電系統原理','無線電相關安全防護','電磁相容性技術','射頻干擾的預防與排除'";
+    $placeholders = implode(',', array_fill(0, count($catList), '?'));
+    $sql = "SELECT $cols FROM questions WHERE category IN ($placeholders) ORDER BY RANDOM() LIMIT $limit";
+    $params = $catList;
 }
 
-$sql = "SELECT * FROM questions WHERE category IN ($cat_list) ORDER BY RAND() LIMIT $limit";
-$result = mysqli_query($conn, $sql);
+try {
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $questions = $stmt->fetchAll();
 
-$exam_questions = [];
-while($row = mysqli_fetch_assoc($result)) {
-    $exam_questions[] = $row;
+    header('Content-Type: application/json');
+    echo json_encode($questions);
+} catch (PDOException $e) {
+    echo json_encode(["error" => $e->getMessage()]);
 }
-
-header('Content-Type: application/json');
-echo json_encode($exam_questions);
 ?>

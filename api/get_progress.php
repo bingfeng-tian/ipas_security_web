@@ -1,35 +1,38 @@
 <?php
 require_once '../config/db.php';
 
-// 官方各單元總題數
-$totals = [
-    '無線電規章與相關法規' => 229,
-    '無線電通訊方法' => 132,
-    '無線電系統原理' => 145,
-    '無線電相關安全防護' => 36,
-    '電磁相容性技術' => 10,
-    '射頻干擾的預防與排除' => 18
+// 定義 6 大單元及其包含的原始小類
+$ui_categories = [
+    '資安法規與標準' => ['標準與法規類', '資料安全類'],
+    '資安基礎知識' => ['基礎知識類'],
+    '資安實務應用' => ['實務應用類'],
+    '攻擊防禦與加密' => ['攻擊與防禦類', '加密與認證類'],
+    '網路與雲端安全' => ['網路安全類', '雲端安全類'],
+    '系統安全技術' => ['系統安全類']
 ];
 
 $progress = [];
 
-foreach ($totals as $category => $total_count) {
-    // 只要 correct_count > 0 就代表這題你「會了」
-    $sql = "SELECT COUNT(*) as mastered FROM questions q 
-            JOIN question_stats s ON q.id = s.question_id 
-            WHERE q.category = '$category' AND s.correct_count > 0";
-            
-    $res = mysqli_query($conn, $sql);
-    $row = mysqli_fetch_assoc($res);
+foreach ($ui_categories as $ui_name => $sub_cats) {
+    $cat_list = "'" . implode("','", $sub_cats) . "'";
+    
+    // 統計該 UI 單元的總題數
+    $sql_total = "SELECT COUNT(*) as total FROM questions WHERE category IN ($cat_list)";
+    $total = $pdo->query($sql_total)->fetch()['total'];
+    
+    // 統計該 UI 單元已精通的題數 (正確次數 > 0)
+    $sql_mastered = "SELECT COUNT(*) as mastered FROM questions q 
+                     JOIN question_stats s ON q.id = s.question_id 
+                     WHERE q.category IN ($cat_list) AND s.correct_count > 0";
+    $mastered = $pdo->query($sql_mastered)->fetch()['mastered'];
     
     $progress[] = [
-        'category' => $category,
-        'mastered' => intval($row['mastered']),
-        'total' => $total_count,
-        'percent' => round(($row['mastered'] / $total_count) * 100, 1)
+        'category' => $ui_name,
+        'mastered' => intval($mastered),
+        'total' => intval($total),
+        'percent' => ($total > 0) ? round(($mastered / $total) * 100, 1) : 0
     ];
 }
 
 header('Content-Type: application/json');
 echo json_encode($progress);
-?>

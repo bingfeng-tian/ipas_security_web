@@ -2,13 +2,45 @@ let currentAns = "", currentId = 0, isAnswered = false;
 let sessionCorrect = 0, sessionTotal = 0;
 let currentQuestionData = {}; 
 
-// [修改 1] 更新分類：IPAS 初級主要分為這兩大科
-const allCategories = ['資訊安全管理概論', '資訊安全技術概論'];
+// 1. 定義全新的 6 大資安練習單元
+const allCategories = [
+    '資安法規與標準', 
+    '資安基礎知識', 
+    '資安實務應用', 
+    '攻擊防禦與加密', 
+    '網路與雲端安全', 
+    '系統安全技術'
+];
+
+// 2. 定義 UI 單元與資料庫原始標籤的映射關係
+const categoryMap = {
+    '資安法規與標準': ['標準與法規類', '資料安全類'],
+    '資安基礎知識': ['基礎知識類'],
+    '資安實務應用': ['實務應用類'],
+    '攻擊防禦與加密': ['攻擊與防禦類', '加密與認證類'],
+    '網路與雲端安全': ['網路安全類', '雲端安全類'],
+    '系統安全技術': ['系統安全類']
+};
 
 function loadSettings() {
     document.getElementById('recordModeToggle').checked = (localStorage.getItem('isRecordMode') !== 'false');
     document.getElementById('weaknessModeToggle').checked = (localStorage.getItem('isWeaknessMode') === 'true');
-    const savedCats = JSON.parse(localStorage.getItem('selectedCats')) || allCategories;
+    
+    // 取得快取中的分類
+    let savedCats = [];
+    try {
+        savedCats = JSON.parse(localStorage.getItem('selectedCats')) || [];
+    } catch(e) { savedCats = []; }
+
+    // 【強制重置邏輯】解決選單沒改變的問題
+    // 檢查快取資料是否與新的 6 大類相符，如果不符則清空重置
+    const isOldData = savedCats.length === 0 || !allCategories.includes(savedCats[0]);
+    if (isOldData) {
+        console.log("檢測到舊版數據，正在重置分類選單...");
+        savedCats = allCategories;
+        localStorage.setItem('selectedCats', JSON.stringify(allCategories));
+    }
+
     renderCategoryFilters(savedCats);
     document.getElementById('customCount').value = localStorage.getItem('customCount') || "10";
     document.getElementById('customTime').value = localStorage.getItem('customTime') || "40";
@@ -17,7 +49,6 @@ function loadSettings() {
 function renderCategoryFilters(selectedCats) {
     const container = document.getElementById('categoryFilters');
     if(container) {
-        // [修改 2] 移除 .replace('無線電', '')，直接顯示分類名稱
         container.innerHTML = allCategories.map(cat => `
             <div style="margin-bottom:6px; display:flex; align-items:center;">
                 <input type="checkbox" class="cat-checkbox" value="${cat}" ${selectedCats.includes(cat) ? 'checked' : ''} onchange="saveSettings()"> 
@@ -31,20 +62,30 @@ function saveSettings() {
     localStorage.setItem('isWeaknessMode', document.getElementById('weaknessModeToggle').checked);
     const checkedCats = Array.from(document.querySelectorAll('.cat-checkbox:checked')).map(cb => cb.value);
     localStorage.setItem('selectedCats', JSON.stringify(checkedCats));
-    localStorage.setItem('customCount', document.getElementById('customCount').value);
-    localStorage.setItem('customTime', document.getElementById('customTime').value);
 }
 
 async function fetchNext() {
     isAnswered = false;
     document.getElementById('next-btn').style.display = 'none';
     document.getElementById('ai-btn').style.display = 'none'; 
-    document.querySelectorAll('.opt-btn').forEach(b => { b.className = 'opt-btn'; b.disabled = false; });
     
-    const cats = JSON.parse(localStorage.getItem('selectedCats')) || allCategories;
+    const explainBox = document.getElementById('explain-box');
+    if(explainBox) explainBox.style.display = 'none';
+
+    document.querySelectorAll('.opt-btn').forEach(b => { 
+        b.className = 'opt-btn'; 
+        b.disabled = false; 
+    });
+    
+    const selectedMainCats = JSON.parse(localStorage.getItem('selectedCats')) || allCategories;
+    let subCats = [];
+    selectedMainCats.forEach(main => {
+        if(categoryMap[main]) subCats = subCats.concat(categoryMap[main]);
+    });
+
     const params = new URLSearchParams({ 
         mode: localStorage.getItem('isWeaknessMode') === 'true' ? 'weakness' : 'all', 
-        cats: cats.join(',') 
+        cats: subCats.join(',') 
     });
 
     try {
@@ -57,11 +98,14 @@ async function fetchNext() {
 
         currentQuestionData = data;
         currentId = data.id; 
-        currentAns = data.answer;
-        document.getElementById('category').innerText = data.category;
-        document.getElementById('q-num').innerText = `題號: ${data.q_num}`;
-        document.getElementById('question').innerText = `${data.question} (${data.correct_count || 0}/${data.wrong_count || 0})`;
+        // 【修正】確保答案為大寫且無空格
+        currentAns = (data.answer || "").toString().trim().toUpperCase(); 
         
+        document.getElementById('category').innerText = data.category;
+        document.getElementById('q-num').innerText = `題號: ${data.id}`;
+        document.getElementById('question').innerText = data.question;
+        
+        // 圖片處理
         const imgContainer = document.getElementById('q-image-container');
         const imgTag = document.getElementById('q-image');
         if (data.image && data.image.trim() !== "") {
@@ -75,7 +119,7 @@ async function fetchNext() {
         document.getElementById('optB').innerText = "B. " + data.option_b;
         document.getElementById('optC').innerText = "C. " + data.option_c;
         document.getElementById('optD').innerText = "D. " + data.option_d;
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("擷取題目失敗:", e); }
 }
 
 function checkAns(choice) {
@@ -83,12 +127,49 @@ function checkAns(choice) {
     isAnswered = true; sessionTotal++;
     currentQuestionData.userChoice = choice;
 
+    // 【除錯用】在瀏覽器主控台印出答案，方便確認資料庫內容
+    console.log("正確答案是:", currentAns, "您的選擇是:", choice);
+
     const isCorrect = (choice === currentAns);
-    const mapping = { 'A': 'optA', 'B': 'optB', 'C': 'optC', 'D': 'optD' };
+    
+    // 強化對應表：支援 A/B/C/D 與 1/2/3/4
+    const mapping = { 
+        'A': 'optA', 'B': 'optB', 'C': 'optC', 'D': 'optD',
+        '1': 'optA', '2': 'optB', '3': 'optC', '4': 'optD',
+        'A.': 'optA', 'B.': 'optB', 'C.': 'optC', 'D.': 'optD'
+    };
     
     document.querySelectorAll('.opt-btn').forEach(b => b.disabled = true);
-    document.getElementById(mapping[choice]).classList.add(isCorrect ? 'correct' : 'wrong');
-    if (!isCorrect) document.getElementById(mapping[currentAns]).classList.add('correct');
+
+    // 取得點擊的按鈕與正確答案的按鈕
+    const clickedBtn = document.getElementById(mapping[choice]);
+    const correctBtn = document.getElementById(mapping[currentAns]);
+
+    // 安全檢查：確保按鈕存在才執行 classList 操作，避免 TypeError
+    if (clickedBtn) {
+        clickedBtn.classList.add(isCorrect ? 'correct' : 'wrong');
+    }
+    
+    // 如果答錯，亮起正確答案
+    if (!isCorrect && correctBtn) {
+        correctBtn.classList.add('correct');
+    } else if (!isCorrect && !correctBtn) {
+        // 如果還是亮不起來，顯示警告訊息
+        console.error("找不到正確答案的按鈕，請檢查資料庫內容是否為 A,B,C,D 或 1,2,3,4");
+    }
+
+    // 顯示解析
+    if (!isCorrect && currentQuestionData.explain && currentQuestionData.explain.trim() !== "") {
+        let explainBox = document.getElementById('explain-box');
+        if (!explainBox) {
+            explainBox = document.createElement('div');
+            explainBox.id = 'explain-box';
+            explainBox.style = "margin-top:15px; padding:15px; background:#f0f7ff; border-radius:10px; border-left:5px solid #007aff; color:#333; font-size:0.9rem;";
+            document.querySelector('.card').appendChild(explainBox);
+        }
+        explainBox.innerHTML = "<strong>💡 解析：</strong><br>" + currentQuestionData.explain;
+        explainBox.style.display = 'block';
+    }
     
     if (isCorrect) sessionCorrect++;
     document.getElementById('session-score').innerText = `對: ${sessionCorrect} | 總: ${sessionTotal}`;
@@ -103,26 +184,8 @@ function checkAns(choice) {
     document.getElementById('next-btn').style.display = 'block';
     document.getElementById('ai-btn').style.display = 'block';
 }
-
-/**
- * 產生 Prompt 並呼叫 utils.js 中的 copyToClipboard
- */
 function copyAndAskAI_Single() {
-    // [修改 3] 更新 AI 提示詞 Context
-    const prompt = `我正在練習 IPAS 資訊安全初級題目，請幫我解析這題：
-
-題目：${currentQuestionData.question}
-選項：
-A. ${currentQuestionData.option_a}
-B. ${currentQuestionData.option_b}
-C. ${currentQuestionData.option_c}
-D. ${currentQuestionData.option_d}
-
-正確答案：${currentQuestionData.answer}
-我的選擇：${currentQuestionData.userChoice}
-
-請告訴我為什麼選 ${currentQuestionData.answer}，並解釋相關的資安原理或防護觀念。`;
-
+    const prompt = `我正在練習 IPAS 資訊安全初級題目，請幫我解析這題：\n\n題目：${currentQuestionData.question}\n選項：\nA. ${currentQuestionData.option_a}\nB. ${currentQuestionData.option_b}\nC. ${currentQuestionData.option_c}\nD. ${currentQuestionData.option_d}\n\n正確答案：${currentAns}\n我的選擇：${currentQuestionData.userChoice}\n\n請解釋為什麼答案是 ${currentAns}，並說明相關資安觀念。`;
     copyToClipboard(prompt);
 }
 
@@ -132,9 +195,15 @@ function toggleSettings() {
 }
 
 function startCustomExam() {
+    const selectedMainCats = JSON.parse(localStorage.getItem('selectedCats')) || allCategories;
+    let subCats = [];
+    selectedMainCats.forEach(main => {
+        if(categoryMap[main]) subCats = subCats.concat(categoryMap[main]);
+    });
+
     const params = new URLSearchParams({
         type: 'custom', 
-        cats: (JSON.parse(localStorage.getItem('selectedCats')) || []).join(','),
+        cats: subCats.join(','),
         limit: document.getElementById('customCount').value,
         time: document.getElementById('customTime').value
     });

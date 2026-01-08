@@ -1,41 +1,54 @@
 <?php
-require_once '../config/db.php';  
+require_once '../config/db.php';
 
 $mode = isset($_GET['mode']) ? $_GET['mode'] : 'all';
 $cats = isset($_GET['cats']) ? $_GET['cats'] : '';
-$where_clauses = [];
 
-// 弱點模式
-if ($mode === 'weakness') {
-    $where_clauses[] = "q.id IN (SELECT question_id FROM question_stats WHERE wrong_count > 0)";
+$catList = [];
+if ($cats) {
+    $catList = explode(',', $cats);
 }
 
-// 類別篩選
-if (!empty($cats)) {
-    $cat_array = explode(',', $cats);
-    $cat_list = "'" . implode("','", array_map(fn($c) => mysqli_real_escape_string($conn, $c), $cat_array)) . "'";
-    $where_clauses[] = "q.category IN ($cat_list)";
-}
+// 欄位對應：將資料庫的 A, B, C, D 對應到前端預期的名稱
+$cols = "id, category, question, 
+         A as option_a, B as option_b, C as option_c, D as option_d, 
+         answer, explanation as 'explain', photo as image";
 
-// 關鍵修改：使用 LEFT JOIN 抓取統計數據，並選取 q.* (包含 image)
-$sql = "SELECT q.*, 
-               COALESCE(s.correct_count, 0) as correct_count, 
-               COALESCE(s.wrong_count, 0) as wrong_count 
-        FROM questions q 
-        LEFT JOIN question_stats s ON q.id = s.question_id";
-
-if (count($where_clauses) > 0) {
-    $sql .= " WHERE " . implode(" AND ", $where_clauses);
-}
-$sql .= " ORDER BY RAND() LIMIT 1";
-
-$result = mysqli_query($conn, $sql);
-$row = mysqli_fetch_assoc($result);
-
-header('Content-Type: application/json');
-if ($row) {
-    echo json_encode($row);
+if (!empty($catList)) {
+    $placeholders = implode(',', array_fill(0, count($catList), '?'));
+    
+    if ($mode === 'weakness') {
+        $sql = "SELECT $cols FROM questions q 
+                JOIN question_stats s ON q.id = s.question_id 
+                WHERE q.category IN ($placeholders) AND s.wrong_count > 0 
+                ORDER BY RANDOM() LIMIT 1";
+    } else {
+        $sql = "SELECT $cols FROM questions WHERE category IN ($placeholders) ORDER BY RANDOM() LIMIT 1";
+    }
 } else {
-    echo json_encode(["status" => "empty", "message" => "範圍內無題目"]);
+    $sql = "SELECT $cols FROM questions ORDER BY RANDOM() LIMIT 1";
+}
+
+try {
+    $stmt = $pdo->prepare($sql);
+    if (!empty($catList)) {
+        $stmt->execute($catList);
+    } else {
+        $stmt->execute();
+    }
+    
+    $row = $stmt->fetch();
+
+    header('Content-Type: application/json');
+    if ($row) {
+        // 補上前端預期但可能缺少的統計數據
+        $row['correct_count'] = 0;
+        $row['wrong_count'] = 0;
+        echo json_encode($row);
+    } else {
+        echo json_encode(["status" => "empty", "message" => "該分類無題目"]);
+    }
+} catch (PDOException $e) {
+    echo json_encode(["status" => "error", "message" => $e->getMessage()]);
 }
 ?>

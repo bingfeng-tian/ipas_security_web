@@ -3,28 +3,29 @@ require_once '../config/db.php';
 
 $type = isset($_GET['type']) ? $_GET['type'] : 'full';
 
-// 確保 SELECT *，這樣就會包含 image 欄位
+// 欄位對應
+$cols = "id, category, question, A as option_a, B as option_b, C as option_c, D as option_d, answer, explanation as 'explain', photo as image";
+
 if ($type === 'mini') {
-    // 小測驗：隨機 10 題
-    $sql = "SELECT * FROM questions ORDER BY RAND() LIMIT 10";
+    // 小測驗隨機 20 題
+    $sql = "SELECT $cols FROM questions ORDER BY RANDOM() LIMIT 20";
 } else {
-    // 全真模考：依照 NCC 比例配題 (共 35 題)
+    // 全真模考：管理組 (科目一) 25 題，技術組 (科目二) 25 題
+    $mgmt_list = "'標準與法規類','資料安全類','基礎知識類'";
+    $tech_list = "'實務應用類','攻擊與防禦類','加密與認證類','網路安全類','雲端安全類','系統安全類'";
+
     $sql = "
-    (SELECT * FROM questions WHERE category = '無線電規章與相關法規' ORDER BY RAND() LIMIT 13)
-    UNION ALL
-    (SELECT * FROM questions WHERE category = '無線電通訊方法' ORDER BY RAND() LIMIT 12)
-    UNION ALL
-    (SELECT * FROM questions WHERE category = '無線電系統原理' ORDER BY RAND() LIMIT 10)
+        SELECT * FROM (SELECT $cols FROM questions WHERE category IN ($mgmt_list) ORDER BY RANDOM() LIMIT 25)
+        UNION ALL
+        SELECT * FROM (SELECT $cols FROM questions WHERE category IN ($tech_list) ORDER BY RANDOM() LIMIT 25)
     ";
 }
 
-$result = mysqli_query($conn, $sql);
-$questions = [];
-
-while ($row = mysqli_fetch_assoc($result)) {
-    $questions[] = $row;
+try {
+    $stmt = $pdo->query($sql);
+    $questions = $stmt->fetchAll();
+    header('Content-Type: application/json');
+    echo json_encode($questions);
+} catch (PDOException $e) {
+    echo json_encode(["error" => $e->getMessage()]);
 }
-
-header('Content-Type: application/json');
-echo json_encode($questions);
-?>

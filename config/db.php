@@ -1,19 +1,22 @@
 <?php
 // config/db.php
-$host = "localhost";
-$db_name = "quiz_db";
-$username = "root";
-$password = "";
+// 指定 SQLite 檔案路徑
+$db_file = __DIR__ . '/../data/newdata_0424.db';
 
-// 建議使用 try-catch 或設定不顯示詳細錯誤
-mysqli_report(MYSQLI_REPORT_OFF); // 關閉報錯功能，避免暴露路徑
-
-$conn = mysqli_connect($host, $username, $password, $db_name);
-
-if (!$conn) {
-    // 發生錯誤時，只顯示簡短訊息，不顯示 mysqli_connect_error()
-    die("資料庫連線失敗，請稍後再試。"); 
+try {
+    $pdo = new PDO("sqlite:" . $db_file);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    
+    // 自動建立統計表 (因為您的檔案裡原本只有題目，沒有統計表)
+    $pdo->exec("CREATE TABLE IF NOT EXISTS question_stats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        question_id INTEGER UNIQUE,
+        correct_count INTEGER DEFAULT 0,
+        wrong_count INTEGER DEFAULT 0,
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )");
+} catch (PDOException $e) {
+    die("資料庫連線失敗: " . $e->getMessage());
 }
-
-mysqli_set_charset($conn, "utf8mb4");
 ?>
